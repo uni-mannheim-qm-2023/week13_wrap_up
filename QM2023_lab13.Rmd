@@ -190,7 +190,8 @@ Let's generate different response variable types from this linear predictor $\mu
 
 ```{r}
 # Continuous dependent variable
-y_continuous <- mu + rnorm(N, mean = 0, sd = 3)
+sigma <- 3
+y_continuous <- mu + rnorm(N, mean = 0, sd = sigma)
 
 # Binary dependent variable
 p <- exp(mu) / (1 + exp(mu))
@@ -206,7 +207,7 @@ y_count <- rnbinom(N, size = theta, mu = lambda)
 
 The table above will also help you when you simulate from your statistical models and construct substantive quantities of interest. 
 
-Simply simulate from your model, identify the response function (inverse link function) that describes your statistical model family, and construct expected values. If you care about predictions, additionally sample from the relevant stochastic component. 
+Simulate from your model, identify the response function (inverse link function) that describes your statistical model family, and construct expected values. If you care about predictions, additionally sample from the relevant stochastic component. 
 
 * 1. Simulate estimation uncertainty of parameters $S$. *(same for all models)*
 * 2. Construct the linear predictor $\mu$. *(same for all models)*
@@ -237,7 +238,7 @@ m2 <- glm(y_binary ~ X1 + X2, data,
 m3 <- glm.nb(y_count ~ X1 + X2, data) # negative binomial regression
 
 # Construct scenarios to evaluate
-scenario <- rbind(
+scenario <- cbind(
   1, # intercept
   1, # X1
   seq(min(data$X2), max(data$X2), length=100) # X2
@@ -257,7 +258,7 @@ Expected and predicted values for **linear regression** (check the table above!)
 
 ```{r}
 # Construct linear predictor
-mu1 <- construct_S(m1) %*% scenario 
+mu1 <- construct_S(m1) %*% t(scenario)
 
 # Apply response function to get expected values
 EV_linear <- mu1 # link = identity link
@@ -265,13 +266,16 @@ EV_linear <- mu1 # link = identity link
 # Sample from stochastic component to get predicted values
 sigma_est <- sqrt(sum(residuals(m1)^2) / (nrow(data) - length(m1$coefficients)))
 PV_linear <- rnorm(length(EV_linear), mean = EV_linear, sd = sigma_est) 
+PV_linear <- matrix(PV_linear,
+                    nrow = nrow(EV_linear),
+                    ncol = ncol(EV_linear))
 ```
 
 Expected and predicted values for **logistic regression** (check the table above!): 
 
 ```{r}
 # Construct linear predictor
-mu2 <- construct_S(m2) %*% scenario 
+mu2 <- construct_S(m2) %*% t(scenario) 
 
 # Apply response function to get expected values
 EV_logistic <- (exp(mu2))/ (1 + exp(mu2)) # link = logistic link
@@ -287,7 +291,7 @@ Expected and predicted values for **negative binomial regression** (check the ta
 
 ```{r}
 # Construct linear predictor
-mu3 <- construct_S(m3) %*% scenario 
+mu3 <- construct_S(m3) %*% t(scenario) 
 
 # Apply response function to get expected values
 EV_count <- exp(mu3) # link = log link
@@ -295,6 +299,9 @@ EV_count <- exp(mu3) # link = log link
 # Sample from stochastic component to get predicted values
 theta <- m3$theta
 PV_count <- rnbinom(length(EV_count), size = theta, mu = lambda)
+PV_count <- matrix(PV_count,
+                   nrow = nrow(EV_count),
+                   ncol = ncol(EV_count))
 ```
 
 Plot expected Values
@@ -450,6 +457,13 @@ S <- mvrnorm(1000, gamma_hat, V_hat)
 ### Calculate Expected Values
 
 Set up interesting scenarios. That's the important step here!
+
+There are two types of typical hypotheses for such models with an interaction term:
+
+  1. X1 has a positive (/negative) effect on Y, and this effect is moderated by X2.
+  2. X2 has a positive (/negative) effect on Y, and this effect is moderated by X1.
+  
+Though these seem to be pretty similar, the choice of the most useful scenario differs, depending on which of both hypotheses you are interested in. Let's assume, we want to test the first one.
 
 ```{r}
 X1_sim <- seq(min(X1), max(X1), length.out = 100)
